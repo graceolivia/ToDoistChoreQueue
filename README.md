@@ -28,7 +28,30 @@ this script keeps a rolling queue in todoist so only the **next** chore is due *
    python3 chore_queue.py
    ```
 
-## schedule it (cron on mac/linux)
+## github actions setup (recommended)
+
+### 1. fork/upload this repo to github
+push this code to a github repository (public or private).
+
+### 2. set up secrets and variables
+go to your repository → settings → secrets and variables → actions:
+
+**secrets** (encrypted):
+- `TODOIST_TOKEN`: your todoist api token (settings → integrations)
+
+**variables** (plain text, optional):
+- `PROJECT_NAME`: your project name (defaults to "chore queue")
+
+### 3. enable actions
+the workflow runs automatically every day at 6:10 AM UTC. you can also trigger it manually from the actions tab.
+
+### 4. adjust timezone (optional)
+edit `.github/workflows/chore-queue.yml` and change the cron schedule:
+```yaml
+- cron: '10 6 * * *'  # 6:10 AM UTC
+```
+
+## alternative: local cron (mac/linux)
 edit crontab:
 ```bash
 crontab -e
@@ -37,6 +60,7 @@ run it every morning at 6:10:
 ```
 10 6 * * * cd /path/to/TodoistChoreQueue && python3 chore_queue.py >> chore_queue.log 2>&1
 ```
+
 (the script will load the .env file automatically)
 
 ## multiple queues

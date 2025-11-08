@@ -78,9 +78,66 @@ class Todoist:
 
     def get_project_id_by_name(self, name: str) -> t.Optional[int]:
         projects = self.list_projects()
+        
+        # first try exact match
         for p in projects:
             if p["name"].strip().lower() == name.strip().lower():
                 return p["id"]
+        
+        # if no exact match and name contains '/', try hierarchical lookup
+        if '/' in name:
+            return self._resolve_hierarchical_project(projects, name)
+        
+        return None
+    
+    def _resolve_hierarchical_project(self, projects: list, path: str) -> t.Optional[int]:
+        """resolve hierarchical project path like 'Chores/Rotating Chore Queue'"""
+        path_parts = [part.strip() for part in path.split('/')]
+        
+        # build project hierarchy map
+        project_map = {}
+        children_map = {}
+        
+        for p in projects:
+            project_map[p["id"]] = p
+            parent_id = p.get("parent_id")
+            if parent_id:
+                if parent_id not in children_map:
+                    children_map[parent_id] = []
+                children_map[parent_id].append(p["id"])
+        
+        # find root project matching first part
+        root_candidates = []
+        for p in projects:
+            if (not p.get("parent_id") and 
+                p["name"].strip().lower() == path_parts[0].lower()):
+                root_candidates.append(p["id"])
+        
+        # traverse path for each root candidate
+        for root_id in root_candidates:
+            current_id = root_id
+            found = True
+            
+            # traverse remaining path parts
+            for part in path_parts[1:]:
+                child_ids = children_map.get(current_id, [])
+                next_id = None
+                
+                for child_id in child_ids:
+                    child_project = project_map[child_id]
+                    if child_project["name"].strip().lower() == part.lower():
+                        next_id = child_id
+                        break
+                
+                if next_id is None:
+                    found = False
+                    break
+                    
+                current_id = next_id
+            
+            if found:
+                return current_id
+        
         return None
 
     # tasks
@@ -180,15 +237,38 @@ def main():
         sys.exit(1)
 
     todo = Todoist(token)
-    results = []
     for cfg in QUEUES:
         try:
             res = promote_queue(todo, cfg)
+            print_result(res)
         except Exception as e:
-            res = {"project": cfg.get("project_name","(unknown)"), "status": "error", "error": str(e)}
-        results.append(res)
+            print(f"error: {cfg.get('project_name','(unknown)')} - {str(e)}")
 
-    print(json.dumps({"ran_at": datetime.utcnow().isoformat()+"Z", "results": results}, indent=2))
+def print_result(result: dict):
+    """print user-friendly status message"""
+    project = result["project"]
+    status = result["status"]
+    
+    if status == "ok":
+        task = result["promoted_task"]
+        cleared = result["cleared_due_on"]
+        labeled = result["labeled"]
+        
+        print(f"success: '{task}' promoted to today in {project}")
+        if cleared > 0:
+            print(f"  cleared due dates from {cleared} other tasks")
+        if labeled:
+            print(f"  applied @next label")
+            
+    elif status == "empty":
+        print(f"info: {project} has no tasks")
+        
+    elif status == "missing_project":
+        print(f"error: project '{project}' not found")
+        
+    elif status == "error":
+        error_msg = result.get("error", "unknown error")
+        print(f"error: {project} - {error_msg}")
 
 if __name__ == "__main__":
     main()
