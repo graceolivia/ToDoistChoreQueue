@@ -27,5 +27,5 @@ jobs:
     - name: Run chore queue script
       env:
         TODOIST_TOKEN: ${{ secrets.TODOIST_TOKEN }}
-        PROJECT_NAME: ${{ vars.PROJECT_NAME || 'chore queue' }}
+        PROJECT_NAME: ${{ secrets.PROJECT_NAME || 'chore queue' }}
       run: python chore_queue.py
